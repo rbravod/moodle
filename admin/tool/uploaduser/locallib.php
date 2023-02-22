@@ -410,6 +410,64 @@ function uu_allowed_roles_cache(?int $categoryid = null): array {
 }
 
 /**
+ * Returns mapping of roles using short role name as index for each course where users are going to be enroled.
+ *
+ * @param csv_import_reader $cir
+ * @param array $columnsheaders
+ * @return array
+ */
+function uu_allowed_roles_in_courses_cache(csv_import_reader $cir, $columnsheaders): array {
+    global $DB;
+
+    // Roles allowed in each course.
+    $allowedroles = [];
+    // Unique course shortnames in file.
+    $courseshortnames = [];
+    // Column positions of courses in file line.
+    $positions = (preg_grep('/^course\d+$/', $columnsheaders));
+
+    // Get all different courses from file.
+    $cir->init();
+    while ($line = $cir->next()) {
+        $courseshortnames = array_merge($courseshortnames, array_intersect_key($line, $positions));
+    }
+    $cir->close();
+    $courseshortnames = array_unique($courseshortnames);
+
+    if (count($courseshortnames) === 0) {
+        return [];
+    }
+
+    // Get assignable roles for each course.
+    list($sql, $params) = $DB->get_in_or_equal($courseshortnames);
+    $courseids = $DB->get_fieldset_select('course', 'id', 'shortname ' . $sql, $params);
+    // Add SITEID, technically frontpage does not have enrolments, but only role assignments.
+    $courseids[] = SITEID;
+    foreach ($courseids as $courseid) {
+        $roles = get_assignable_roles(context_course::instance((int)$courseid), ROLENAME_SHORT);
+        foreach ($roles as $roleid => $rolename) {
+            $allowedroles[$roleid]['courses'][] = (int)$courseid;
+            $allowedroles[$roleid]['name'] = $rolename;
+        }
+    }
+
+    $rolecache = [];
+    foreach ($allowedroles as $rid => $rolecourses) {
+        $rolecache[$rid] = new stdClass();
+        $rolecache[$rid]->id   = $rid;
+        $rolecache[$rid]->name = $rolecourses['name'];
+        $rolecache[$rid]->courses = $rolecourses['courses'];
+        if (!is_numeric($rolecourses['name'])) {
+            $rolecache[$rolecourses['name']] = new stdClass();
+            $rolecache[$rolecourses['name']]->id = $rid;
+            $rolecache[$rolecourses['name']]->name = $rolecourses['name'];
+            $rolecache[$rolecourses['name']]->courses = $rolecourses['courses'];
+        }
+    }
+    return $rolecache;
+}
+
+/**
  * Returns mapping of all system roles using short role name as index.
  * @return array
  */

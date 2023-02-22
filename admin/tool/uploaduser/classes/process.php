@@ -126,7 +126,13 @@ class process {
         $today = make_timestamp(date('Y', $today), date('m', $today), date('d', $today), 0, 0, 0);
         $this->today = $today;
 
-        $this->rolecache      = uu_allowed_roles_cache(); // Course roles lookup cache.
+        $this->find_profile_fields();
+        $this->find_standard_fields();
+
+        $filecolumnsheaders = $this->get_file_columns();
+        $this->rolecache = preg_grep('/^course\d+$/', $filecolumnsheaders)
+            ? uu_allowed_roles_in_courses_cache($this->cir, $filecolumnsheaders)
+            : uu_allowed_roles_cache();
         $this->sysrolecache   = uu_allowed_sysroles_cache(); // System roles lookup cache.
         $this->supportedauths = uu_supported_auths(); // Officially supported plugins that are enabled.
 
@@ -135,8 +141,6 @@ class process {
             $this->manualenrol = enrol_get_plugin('manual');
         }
 
-        $this->find_profile_fields();
-        $this->find_standard_fields();
     }
 
     /**
@@ -1215,7 +1219,8 @@ class process {
 
                 if (!empty($user->{'role'.$i})) {
                     $rolename = $user->{'role'.$i};
-                    if (array_key_exists($rolename, $this->rolecache)) {
+                    if (array_key_exists($rolename, $this->rolecache) &&
+                            in_array((int)$courseid, $this->rolecache[$rolename]->courses)) {
                         $roleid = $this->rolecache[$rolename]->id;
                     } else {
                         $this->upt->track('enrolments', get_string('unknownrole', 'error', s($rolename)), 'error');
@@ -1236,7 +1241,8 @@ class process {
                 $roleid = false;
                 if (!empty($user->{'role'.$i})) {
                     $rolename = $user->{'role'.$i};
-                    if (array_key_exists($rolename, $this->rolecache)) {
+                    if (array_key_exists($rolename, $this->rolecache) &&
+                            in_array((int)$courseid, $this->rolecache[$rolename]->courses)) {
                         $roleid = $this->rolecache[$rolename]->id;
                     } else {
                         $this->upt->track('enrolments', get_string('unknownrole', 'error', s($rolename)), 'error');
