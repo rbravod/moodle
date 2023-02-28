@@ -1,7 +1,7 @@
 @tool @tool_uploaduser @_file_upload
 Feature: Upload users
   In order to add users to the system
-  As an admin
+  As an admin or user
   I need to upload files containing the users data
 
   @javascript
@@ -296,3 +296,106 @@ Feature: Upload users
     And I navigate to "Users > Accounts > Browse list of users" in site administration
     And I should see "Bilbo Baggins"
     And I should not see "Frodo Baggins"
+
+  @javascript
+  Scenario: Upload users enrolling them on courses and assign category and course roles as user
+    Given the following "categories" exist:
+      | name | idnumber | category |
+      | MGMT | MGMT     | 0        |
+      | Film | Film     | 0        |
+    And the following "courses" exist:
+      | fullname    | shortname   | category |
+      | management1 | management1 | MGMT     |
+      | film1       | film1       | Film     |
+      | movie1      | movie1      | Film     |
+    And the following "roles" exist:
+      | shortname       | name            | archetype |
+      | canassignrole   | canassignrole   |           |
+      | uploadusersrole | uploadusersrole |           |
+    And the following "permission overrides" exist:
+      | capability                | permission | role            | contextlevel | reference |
+      | enrol/manual:enrol        | Allow      | canassignrole   | Category     | MGMT      |
+      | moodle/course:enrolreview | Allow      | canassignrole   | Category     | MGMT      |
+      | moodle/role:assign        | Allow      | canassignrole   | Category     | MGMT      |
+      # We need some capabilities to upload a CVS file.
+      | moodle/site:uploadusers   | Allow      | uploadusersrole | System       |           |
+      | moodle/site:configview    | Allow      | uploadusersrole | System       |           |
+    And the following "users" exist:
+      | username | firstname | lastname | email           |
+      | user1    | User      | One      | one@example.com |
+    And the following "role assigns" exist:
+      | user    	| role    	      | contextlevel	| reference		|
+      | user1   	| canassignrole	  | Category    	|	MGMT				|
+      | user1     | uploadusersrole | System        |             |
+    And I log in as "admin"
+    And I define the allowed role assignments for the "canassignrole" role as:
+      | Student        | Assignable |
+      | Course creator | Assignable |
+    And I log out
+    And I log in as "user1"
+    And I navigate to "Users > Accounts > Upload users" in site administration
+    When I upload "lib/tests/fixtures/upload_users_category.csv" file to "File" filemanager
+    And I press "Upload users"
+    Then the following should exist in the "uupreview" table:
+    | username | password   | firstname | lastname | email               | category1 | categoryrole1    | course1     | role1   |
+    | jonest   | verysecret | Tom       | Jones    | jonest@example.com  | MGMT      | manager          | management1 | student |
+    | reznor 	 | somesecret |	Trent     |	Reznor   | reznor@example.com  | MGMT      | manager          | management1 | student |
+    | aurora   | topsecret  | Aurora    | Jiang    | aurora@example.com  | MGMT      | coursecreator    | management1 | student |
+    | fellini  | mysecret   | Federico  | Fellini  | fellini@example.com | Film      | coursecreator    | film1       | student |
+    | ivanov   | secret     | Ivan      | Ivanov   | ivanov@example.com  | Film      | notcoursecreator | film1       | student |
+    | smith    | notsecret  | John      | Smith    | smith@example.com   | Movie     | coursecreator    | movie1      | student |
+    | cool     | simplepass | Warm      | Cool     | cool@example.com    | MGMT      |                  | management1 | student |
+    | bond     | secret007  | James     | Bond     | bond@example.com    |           | manager          | management1 | student |
+    And I press "Upload users"
+    And I should see "Enrolled in \"management1\" as \"student\"" in the "jonest" "table_row"
+    And I should see "Unknown role \"manager\"" in the "jonest" "table_row"
+    And I should see "Enrolled in \"management1\" as \"student\"" in the "reznor" "table_row"
+    And I should see "Unknown role \"manager\"" in the "reznor" "table_row"
+    And I should see "Enrolled in \"management1\" as \"student\"" in the "aurora" "table_row"
+    And I should not see "Unknown role \"coursecreator\"" in the "aurora" "table_row"
+    And I should see "Unknown role \"student\"" in the "fellini" "table_row"
+    And I should see "Unknown role \"coursecreator\"" in the "fellini" "table_row"
+    And I should see "Unknown role \"student\"" in the "ivanov" "table_row"
+    And I should see "Unknown role \"notcoursecreator\"" in the "ivanov" "table_row"
+    And I should see "Unknown category with category ID number \"Movie\"" in the "smith" "table_row"
+    And I should see "Unknown role \"student\"" in the "smith" "table_row"
+    And I should see "Enrolled in \"management1\" as \"student\"" in the "cool" "table_row"
+    And I should see "Could not assign role to user: missing role for category." in the "cool" "table_row"
+    And I should see "Enrolled in \"management1\" as \"student\"" in the "bond" "table_row"
+    And I log out
+    And I log in as "admin"
+    And I navigate to "Users > Accounts > Browse list of users" in site administration
+    And the following should exist in the "users" table:
+    | First name / Last name | Email address       |
+    | Aurora Jiang           | aurora@example.com  |
+    | Federico Fellini       | fellini@example.com |
+    | Ivan Ivanov            | ivanov@example.com  |
+    | James Bond             | bond@example.com    |
+    | John Smith             | smith@example.com   |
+    | Tom Jones              | jonest@example.com  |
+    | Trent Reznor           | reznor@example.com  |
+    | Warm Cool              | cool@example.com    |
+    And I am on the "management1" "enrolled users" page
+    And the following should exist in the "participants" table:
+    | First name / Last name | Email address       | Roles                   |
+    | Aurora Jiang           | aurora@example.com  | Student, Course creator |
+    | James Bond             | bond@example.com    | Student                 |
+    | Tom Jones              | jonest@example.com  | Student                 |
+    | Trent Reznor           | reznor@example.com  | Student                 |
+    | Warm Cool              | cool@example.com    | Student                 |
+    And I am on the "film1" "enrolled users" page
+    And I should see "Nothing to display"
+    And I am on the "movie1" "enrolled users" page
+    And I should see "Nothing to display"
+    And I navigate to "Courses > Manage courses and categories" in site administration
+    And I click on "permissions" action for "MGMT" in management category listing
+    And I select "Assign roles" from the "jump" singleselect
+    And I should see "0" in the "Manager" "table_row"
+    And I should see "1" in the "Course creator" "table_row"
+    And I should see "Aurora Jiang" in the "Course creator" "table_row"
+    And I am on site homepage
+    And I navigate to "Courses > Manage courses and categories" in site administration
+    And I click on "permissions" action for "Film" in management category listing
+    And I select "Assign roles" from the "jump" singleselect
+    And I should see "0" in the "Manager" "table_row"
+    And I should see "0" in the "Course creator" "table_row"
